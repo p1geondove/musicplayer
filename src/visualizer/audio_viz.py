@@ -254,24 +254,6 @@ class AudioVisualizer:
         
         ypos = self.window_height - height
         self.window.blit(pygame.transform.flip(self.surface_volume, False, True), (0, ypos))
-    
-    # def draw_waveform(self, time_ms: int):
-    #     """Zeichnet die Waveform"""
-    #     self.surface_waveform = pygame.Surface((self.surface_waveform_width,self.surface_waveform_height),pygame.SRCALPHA)
-    #     time_idx = int((time_ms / 1000.0) * self.sr)
-    #     bound = lambda x:min(max(0,x),len(self.y))
-    #     start = bound(time_idx - int(self.sr * WAVEFORM_TIME_S / 2))
-    #     stop = bound(time_idx + int(self.sr * WAVEFORM_TIME_S / 2))
-    #     step = (stop - start) // self.surface_waveform_width
-    #     points = enumerate(self.y[start:stop:step])
-    #     pygame.draw.lines(self.surface_waveform,COLOR_WAVEFORM,False,points)
-    #     self.window.blit(
-    #         self.surface_waveform,
-    #         (
-    #             self.window_width - self.surface_waveform_width,
-    #             self.window_height - self.surface_waveform_height
-    #         )
-    #     )
 
     def draw_waveform(self, time_ms: int):
         """Rendert die Waveform-Visualisierung des aktuellen Audiobereichs.
