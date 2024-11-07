@@ -13,7 +13,36 @@ from io import BytesIO
 from time import time
 
 class MusicPlayer:
+    """Ein Audio-Player mit visueller Oberfläche und Metadaten-Management.
+    
+    Diese Klasse implementiert einen vollständigen Musik-Player mit:
+    - Musikbibliothek-Verwaltung und Metadaten-Caching
+    - Echtzeit-Audio-Visualisierung
+    - Cover-Art Darstellung
+    - Tastatur-Steuerung für Wiedergabe
+    - Responsivem UI-Layout
+    
+    :param music_dir: Pfad zum Musikverzeichnis
+    :type music_dir: str
+    
+    :raises pygame.error: Bei Problemen mit der Pygame-Initialisierung
+    :raises OSError: Bei Problemen mit dem Zugriff auf das Musikverzeichnis
+    
+    :ivar width: Breite des Fensters in Pixeln
+    :vartype width: int
+    :ivar height: Höhe des Fensters in Pixeln
+    :vartype height: int
+    :ivar songs: Liste aller geladenen Songs
+    :vartype songs: list[Song]
+    :ivar current_song_index: Index des aktuellen Songs
+    :vartype current_song_index: int
+    """
     def __init__(self, music_dir: str = DIR_MUSIC):
+        """Musik-player init
+    
+        :param music_dir: pfad zum ordner mit musikdateien
+        :type music_dir: str
+        """
         pygame.init()
         pygame.mixer.init()
         
@@ -105,7 +134,15 @@ class MusicPlayer:
         self.playback = PlaybackManager(song.length)
 
     def load_cache(self, cache_path: str) -> dict:
-        """Lädt den Metadaten-Cache aus einer JSON-Datei."""
+        """Lädt den Metadaten-Cache aus einer JSON-Datei.
+    
+        :param cache_path: Pfad zur Cache-Datei
+        :type cache_path: str
+        :return: Dictionary mit gecachten Metadaten
+        :rtype: dict
+        :raises FileNotFoundError: Wenn die Cache-Datei nicht existiert
+        :raises json.JSONDecodeError: Wenn die Cache-Datei kein valides JSON enthält
+        """
         try:
             with open(cache_path, 'r') as f:
                 return json.load(f)
@@ -118,7 +155,14 @@ class MusicPlayer:
             json.dump(cache, f, indent=2)
 
     def analyze_file(self, file_path: str) -> SongMetadata:
-        """Analysiert eine Audiodatei und extrahiert Metadaten."""
+        """Analysiert eine Audiodatei und extrahiert deren Metadaten.
+    
+        :param file_path: Pfad zur Audiodatei
+        :type file_path: str
+        :return: Objekt mit extrahierten Metadaten
+        :rtype: SongMetadata
+        :raises audio_metadata.MetadataError: Wenn Metadaten nicht gelesen werden können
+        """
         metadata = audio_metadata.load(file_path)
         _,tempo = analyze_audio(file_path)
         
@@ -134,14 +178,25 @@ class MusicPlayer:
         )
 
     def load_cover_from_file(self, file_path: str) -> pygame.Surface|None:
-        """Lädt das Cover aus einer Audiodatei."""
+        """Lädt das Cover aus einer Audiodatei.
+    
+        :param file_path: Pfad zur Audiodatei
+        :type file_path: str
+        :return: Pygame Surface mit dem Cover oder None wenn kein Cover vorhanden
+        :rtype: pygame.Surface|None
+        :raises audio_metadata.MetadataError: Wenn die Datei nicht gelesen werden kann
+        """
         metadata = audio_metadata.load(file_path)
         if hasattr(metadata, 'pictures') and metadata.pictures:
             image_stream = BytesIO(metadata.pictures[0].data)
             return pygame.image.load(image_stream)
 
     def draw_cover(self, cover: pygame.Surface):
-        """Zeichnet das Cover mit korrektem Aspect Ratio über den gesamten Screen."""
+        """Zeichnet das Cover mit korrektem Aspect Ratio über den gesamten Screen.
+    
+        :param cover: Pygame Surface mit dem Cover-Bild
+        :type cover: pygame.Surface
+        """
         scale = min(self.width / cover.get_width(), self.height / cover.get_height())
         size = (int(cover.get_width() * scale), int(cover.get_height() * scale))
         scaled = pygame.transform.scale(cover, size)
@@ -233,9 +288,30 @@ class MusicPlayer:
         pygame.quit()
 
 class PlaybackManager:
+    """Manager für präzise Audio-Wiedergabesteuerung.
+    
+    Implementiert hochpräzises Timing für:
+    - Nanosekunden-genaue Positionsverfolgung
+    - Pause/Resume-Funktionalität mit exakter Zeitsynchronisation
+    - Präzises Seeking mit Audio-Synchronisation
+    
+    :param song_length: Länge des Songs in Sekunden
+    :type song_length: float
+    
+    :ivar song_length: Länge des Songs in Millisekunden
+    :vartype song_length: int
+    :ivar is_paused: Aktueller Pause-Status
+    :vartype is_paused: bool
+    :ivar current_time: Aktuelle Position in Millisekunden
+    :vartype current_time: int
+    """
     def __init__(self, song_length: float):
-        """
+        """Initialisiert einen neuen PlaybackManager.
+        
         :param song_length: Länge des Songs in Sekunden
+        :type song_length: float
+        :return: None
+        :rtype: None
         """
         from time import perf_counter_ns
         self.get_time_ns = perf_counter_ns  # Höhere Präzision als time()

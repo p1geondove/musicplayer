@@ -16,6 +16,25 @@ def clear_cache(cls):
         pass  # Ignoriere Fehler falls Cache noch nicht existiert
 
 class AudioVisualizer:
+    """Echtzeit-Audio-Visualisierung mit Spektrum-, Volumen- und Waveform-Darstellung.
+    
+    Implementiert verschiedene Visualisierungsformen für Audiodaten:
+    - Frequenzspektrum-Visualisierung mit logarithmischer Skalierung
+    - Volumen-Visualisierung mit Fortschrittsanzeige
+    - Waveform-Darstellung des aktuellen Audiobereichs
+    
+    :param song: Song-Objekt mit Pfad und Metadaten
+    :type song: Song
+    :param window: Pygame-Fenster für das Rendering
+    :type window: pygame.Surface
+    
+    :ivar window_width: Breite des Fensters
+    :vartype window_width: int
+    :ivar window_height: Höhe des Fensters
+    :vartype window_height: int
+    :ivar n_fft: FFT-Fenstergröße
+    :vartype n_fft: int
+    """
     def __init__(self, song: Song, window: pygame.Surface):
         """Initialisiert den AudioVisualizer mit lazy loading.
 
@@ -77,8 +96,9 @@ class AudioVisualizer:
     def y(self):
         """Lädt die Audio-Daten lazy.
         
-        :return: Audio-Daten
+        :return: Normalisierte Audio-Samples
         :rtype: np.ndarray
+        :raises librosa.LibrosaError: Wenn die Audiodatei nicht gelesen werden kann
         """
         if self._y is None:
             print("Loading audio...")
@@ -87,10 +107,11 @@ class AudioVisualizer:
     
     @property
     def sr(self):
-        """Gibt Sample-Rate zurück (wird mit y geladen).
+        """Gibt die Sample-Rate der Audiodatei zurück.
         
-        :return: Sample-Rate
+        :return: Sample-Rate in Hz
         :rtype: int
+        :raises AttributeError: Wenn die Audiodatei noch nicht geladen wurde
         """
         if self._sr is None:
             self.y  # Dies lädt auch sr
@@ -120,7 +141,16 @@ class AudioVisualizer:
         return self._S
 
     def setup_volume_visualizer(self, num_samples: int = None):
-        """Initialisiert die Volumen-Visualisierung"""
+        """Initialisiert die Volumen-Visualisierung durch Segmentierung der Audiodaten.
+    
+        Teilt die Audiodaten in gleichmäßige Segmente und berechnet für jedes Segment
+        die durchschnittliche Amplitude. Die Anzahl der Segmente entspricht standardmäßig
+        der Breite der Volumen-Visualisierung.
+        
+        :param num_samples: Anzahl der Segmente für die Visualisierung, optional
+                        Standard ist die Breite der Volumen-Visualisierung
+        :type num_samples: int
+        """
         if num_samples is None:
             num_samples = self.surface_volume_width + 1
             
@@ -146,10 +176,14 @@ class AudioVisualizer:
 
     @lru_cache(maxsize=None)
     def get_current_spectrum(self, time_ms: int) -> np.ndarray:
-        """Berechnet das aktuelle Spektrum.
+        """Berechnet das aktuelle Frequenzspektrum für einen Zeitpunkt.
         
-        :param time_ms: Aktuelle Zeit in ms
-        :return: Spektrum-Daten
+        Nutzt FFT und logarithmische Frequenzbänder für die Spektralanalyse.
+        Ergebnisse werden gecached für bessere Performance.
+        
+        :param time_ms: Aktuelle Wiedergabeposition in Millisekunden
+        :type time_ms: int
+        :return: Normalisierte Magnitudenwerte für jedes Frequenzband
         :rtype: np.ndarray
         """
         # Lazy init der Frequenzbänder
@@ -176,7 +210,11 @@ class AudioVisualizer:
         return band_magnitudes / np.max(band_magnitudes)
     
     def draw_spectrum(self, time_ms: int):
-        """Zeichnet das Frequenzspektrum"""
+        """Rendert das Frequenzspektrum als farbige Balken.
+        
+        :param time_ms: Aktuelle Wiedergabeposition in Millisekunden
+        :type time_ms: int
+        """
         self.surface_spectrum = pygame.Surface(self.surface_spectrum.get_size(), pygame.SRCALPHA)
         spectrum = self.get_current_spectrum(time_ms)
         positions = [(x,y) for x, y in enumerate(spectrum) if y]
@@ -197,7 +235,11 @@ class AudioVisualizer:
         self.window.blit(self.surface_spectrum, (0, 0))
     
     def draw_volume(self, time_ms: int):
-        """Zeichnet die Volumen-Visualisierung"""
+        """Zeichnet die Volumen-Visualisierung mit Fortschrittsanzeige.
+        
+        :param time_ms: Aktuelle Wiedergabeposition in Millisekunden
+        :type time_ms: int
+        """
         width, height = self.surface_volume.get_size()
         
         progress = time_ms / (len(self.y) / self.sr) / 1000.0
@@ -232,7 +274,13 @@ class AudioVisualizer:
     #     )
 
     def draw_waveform(self, time_ms: int):
-        """Zeichnet die Waveform mit optimierter NumPy-Verarbeitung"""
+        """Rendert die Waveform-Visualisierung des aktuellen Audiobereichs.
+        
+        Nutzt NumPy für optimierte Verarbeitung der Audiodaten.
+        
+        :param time_ms: Aktuelle Wiedergabeposition in Millisekunden
+        :type time_ms: int
+        """
         self.surface_waveform = pygame.Surface((self.surface_waveform_width, self.surface_waveform_height), pygame.SRCALPHA)
         time_idx = int((time_ms / 1000.0) * self.sr)
         bound = lambda x: min(max(0, x), len(self.y))
@@ -248,19 +296,43 @@ class AudioVisualizer:
         self.window.blit(self.surface_waveform, (self.window_width - self.surface_waveform_width, self.window_height - self.surface_waveform_height))
 
     def draw(self, time_ms: float):
-        """Zeichnet alle Visualisierungen"""
+        """Zeichnet alle Visualisierungselemente des AudioVisualizers.
+    
+        Rendert nacheinander:
+        - Frequenzspektrum
+        - Volumen-Visualisierung mit Fortschrittsanzeige
+        - Waveform des aktuellen Audiobereichs
+        
+        :param time_ms: Aktuelle Wiedergabeposition in Millisekunden
+        :type time_ms: float
+        """
         self.draw_spectrum(time_ms)
         self.draw_volume(time_ms)
         self.draw_waveform(time_ms)
 
     def get_time_from_click(self, x_pos: int) -> int:
-        """Konvertiert eine x-Position zu einer Songposition in Millisekunden"""
+        """Konvertiert eine x-Koordinate in der Volumen-Visualisierung zu einer Songposition.
+    
+        Berechnet die entsprechende Wiedergabeposition basierend auf der relativen
+        horizontalen Position des Klicks in der Visualisierung.
+        
+        :param x_pos: Horizontale Klickposition in Pixeln
+        :type x_pos: int
+        :return: Entsprechende Position im Song in Millisekunden
+        :rtype: int
+        """
         song_length_sec = len(self.y) / self.sr
         position_ms = int((x_pos / self.surface_volume_width) * song_length_sec * 1000)
         return max(0, min(position_ms, int(song_length_sec * 1000) - 1))
 
     def handle_volume_click(self, event: pygame.event.Event) -> int|None:
-        """Behandelt Mausinteraktionen mit der Volumen-Visualisierung"""
+        """Verarbeitet Mausinteraktionen mit der Volumen-Visualisierung.
+        
+        :param event: Pygame Event-Objekt
+        :type event: pygame.event.Event
+        :return: Neue Wiedergabeposition in ms oder None wenn keine Änderung
+        :rtype: int|None
+        """
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1 and self.volume_rect.collidepoint(event.pos):
                 self.mouse_down = True
@@ -273,7 +345,11 @@ class AudioVisualizer:
             return self.get_time_from_click(x)
 
     def handle_resize(self, new_size: tuple[int, int]):
-        """Behandelt die Größenänderung des Fensters"""
+        """Aktualisiert alle Visualisierungen nach Fenstergrößenänderung.
+        
+        :param new_size: Neue Fenstergröße (Breite, Höhe)
+        :type new_size: tuple[int, int]
+        """
         self.window = pygame.display.get_surface()
         
         # Update surfaces
