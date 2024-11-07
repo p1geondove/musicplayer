@@ -1,0 +1,4 @@
+numpy
+pygame-ce
+librosa
+audio_metadata
